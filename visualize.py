@@ -1,60 +1,105 @@
 import os
+from copy import deepcopy
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 import open3d as o3d
+import open3d.visualization.gui as gui
+import open3d.visualization.rendering as rendering
 import cv2
 
-from utils import load_extrinsics_for_cam, rot_trans_to_homogenous, invert_homogenous
-from utils import project_pose
+from utils import load_camera_params, rot_trans_to_homogenous
+from utils import project_pose, homogenous_to_rot_trans
 
 DATA_DIR = "/data/develop/export_mkv_k4a/test_system"
 CAMERAS = ["cn01", "cn02", "cn03", "cn04", "cn05", "cn06"]
 
 def project_to_views(point):
-    frame_id = 25
-    for cam in CAMERAS:
+    # cam 1 [750, 640]
+    for cam in CAMERAS[:]:
         file_id = str(frame_id).zfill(10)
-        params = load_extrinsics_for_cam(cam, DATA_DIR)
+        params = load_camera_params(cam, DATA_DIR)
         loc2d = project_pose(point, params)[0]
         fpath = os.path.join(DATA_DIR, cam, f"{file_id}_color.jpg")
         color = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
         if color is None:
             print("File not found: ", fpath)
+        # shape is in form: [height, width, channel]
         height, width, _ = color.shape
+        # y-val <-> height x-val <-> width
         x, y = loc2d
         if 0 < x and x < width and 0 < y and y < height:
-            print(loc2d)
-            cv2.circle(color, (int(x), int(y)), 5, (0, 255, 0), 2);
+            print("Point present in image")
+            print("\n")
+            cv2.circle(color, (int(x), int(y)), 10, (0, 255, 0), 2);
             cv2.imwrite(cam + "_test.jpg", color)
 
-
-def render_camera_poses(point):
-    # draw ball at point
-    frame_id = 35
-
-    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0,0,0])
-    to_render = [mesh_frame]
-    for cam in CAMERAS:
-        file_id = str(frame_id).zfill(4)
-        ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply"))
-        params = load_extrinsics_for_cam(cam, DATA_DIR)
-        A = rot_trans_to_homogenous(params["R"], params["T"])
-        camera_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0,0,0])
-        print(f"Transforming for camera {cam}")
-        camera_origin.transform(A)
-        print(camera_origin.get_center())
-        to_render.append(ply)
-        to_render.append(camera_origin)
+def add_mesh_sphere(point, vis, name):
+    # add a placeholder sphere
     mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.1)
     mesh_sphere.compute_vertex_normals()
     mesh_sphere.paint_uniform_color([0.1, 0.1, 0.7])
     mesh_sphere.translate(point)
-    to_render.append(mesh_sphere)
+    vis.add_geometry(name, mesh_sphere)
+
+
+def render_camera_poses(point, vis):
+
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0,0,0])
+    vis.add_geometry("coordinate_frame", mesh_frame)
+    for cam in CAMERAS:
+        file_id = str(frame_id).zfill(4)
+        ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply"))
+        params = load_camera_params(cam, DATA_DIR)
+        ply.transform(params["depth2world"])
+        vis.add_geometry(f"{cam}-ply", ply)
+
+        # print(f"Transforming for camera {cam}")
+        # camera_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0,0,0])
+        # world2color = params["color2world"]
+        # camera_origin.transform(np.linalg.inv(world2color))
+        # print(camera_origin.get_center())
+        # vis.add_geometry(f"{cam}-color", camera_origin)
+        # vis.add_3d_label(camera_origin.get_center(), cam)
+
+        depth_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0,0,0])
+        world2depth = params["depth2world"]
+        depth_origin.transform(world2depth)
+        print(depth_origin.get_center())
+        vis.add_geometry(f"{cam}-depth-cam", depth_origin)
+        vis.add_3d_label(depth_origin.get_center(), cam + 'depth-')
+
+    add_mesh_sphere(point, vis, "sphere")
     # print(np.asarray(pcd.points))
-    o3d.visualization.draw_geometries(to_render)
+
+def render_single_transform(point, vis):
+    cam = "cn02"
+    file_id = str(frame_id).zfill(4)
+    ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply"))
+    vis.add_geometry(f"{cam}-ply-camera", ply)
+    params = load_camera_params(cam, DATA_DIR)
+    depth2world = params["depth2world"]
+    R, T = homogenous_to_rot_trans(depth2world)
+    add_mesh_sphere(R.T @ (point.T - T), vis, 'sphere-cam')
+    # add the pointcloud in world coordinate system
+    ply_world = deepcopy(ply)
+    ply_world.transform(depth2world)
+    vis.add_geometry(f"{cam}-ply-world", ply_world)
+    add_mesh_sphere(point, vis, 'sphere-world')
+
 
 if __name__ == "__main__":
-    point = [0.258, 0.973, 0.006]
-    # render_camera_poses(point)
+    # draw ball at point
+    frame_id = 25
+    np.set_printoptions(suppress=True)
+    point = np.array([0.268629, -0.957795, 0.002394])
+    app = gui.Application.instance
+    app.initialize()
+    vis = o3d.visualization.O3DVisualizer("Open3D - 3D Text", 1024, 768)
+    vis.show_settings = True
+    # render_camera_poses(point, vis)
+    # render_single_transform(point, vis)
     project_to_views(np.array(point).reshape(1, 3))
+    app.add_window(vis)
+    app.run()
 
