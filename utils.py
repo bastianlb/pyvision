@@ -43,7 +43,7 @@ def homogenous_to_rot_trans(X):
         rotation, translation: 3x3 rotation matrix, 3x1 translation vector
     """
 
-    return X[:3, :3], X[:3, 3].reshape(3,1)
+    return X[:3, :3], X[:3, 3].reshape(3, 1)
 
 def rotation_to_homogenous(vec):
     rot_mat = Rotation.from_rotvec(vec)
@@ -66,10 +66,10 @@ def load_camera_params(cam, dataset_root):
     ds['cy'] = color_intrinsics[1, 2]
     # images are undistorted! Just put 0. Voxelpose assumes just 4 dist coeffs
     dist = fs.getNode("color_distortion_coefficients").mat()
-    # ds['k'] = np.array(dist[[0, 1, 4, 5, 6, 7]])
-    # ds['p'] = np.array(dist[2:4])
-    ds['k'] = np.zeros((3, 1))
-    ds['p'] = np.zeros((2, 1))
+    ds['k'] = np.array(dist[[0, 1, 4, 5, 6, 7]])
+    ds['p'] = np.array(dist[2:4])
+    # ds['k'] = np.zeros((3, 1))
+    # ds['p'] = np.zeros((2, 1))
 
     depth2color_r = fs.getNode('depth2color_rotation').mat()
     # depth2color_t is in mm by default, change all to meters

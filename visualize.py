@@ -2,17 +2,16 @@ import os
 from copy import deepcopy
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 import open3d as o3d
 import open3d.visualization.gui as gui
-import open3d.visualization.rendering as rendering
 import cv2
 
-from utils import load_camera_params, rot_trans_to_homogenous
+from utils import load_camera_params
 from utils import project_pose, homogenous_to_rot_trans
 
-DATA_DIR = "/data/develop/export_mkv_k4a/test_system"
+DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
 CAMERAS = ["cn01", "cn02", "cn03", "cn04", "cn05", "cn06"]
+
 
 def project_to_views(point):
     # cam 1 [750, 640]
@@ -27,12 +26,15 @@ def project_to_views(point):
         # shape is in form: [height, width, channel]
         height, width, _ = color.shape
         # y-val <-> height x-val <-> width
-        x, y = loc2d
+        kinect_offset = np.array([0.5, 0.5])
+        x, y = np.int16(np.round(loc2d - kinect_offset))
         if 0 < x and x < width and 0 < y and y < height:
             print("Point present in image")
             print("\n")
-            cv2.circle(color, (int(x), int(y)), 10, (0, 255, 0), 2);
+            # azure kinect uses reverse indexing
+            cv2.circle(color, (x, y), 1, (0, 255, 0), 1)
             cv2.imwrite(cam + "_test.jpg", color)
+
 
 def add_mesh_sphere(point, vis, name):
     # add a placeholder sphere
@@ -44,25 +46,28 @@ def add_mesh_sphere(point, vis, name):
 
 
 def render_camera_poses(point, vis):
-
-    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0,0,0])
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0, 0, 0])
     vis.add_geometry("coordinate_frame", mesh_frame)
     for cam in CAMERAS:
         file_id = str(frame_id).zfill(4)
-        ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply"))
+        fpath = os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply")
+        if not os.path.exists(fpath):
+            print("File does not exist: ", fpath)
+            continue
+        ply = o3d.io.read_point_cloud(fpath)
         params = load_camera_params(cam, DATA_DIR)
         ply.transform(params["depth2world"])
         vis.add_geometry(f"{cam}-ply", ply)
 
-        # print(f"Transforming for camera {cam}")
-        # camera_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0,0,0])
-        # world2color = params["color2world"]
-        # camera_origin.transform(np.linalg.inv(world2color))
-        # print(camera_origin.get_center())
-        # vis.add_geometry(f"{cam}-color", camera_origin)
-        # vis.add_3d_label(camera_origin.get_center(), cam)
+        print(f"Transforming for camera {cam}")
+        camera_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0, 0, 0])
+        world2color = params["color2world"]
+        camera_origin.transform(world2color)
+        print(camera_origin.get_center())
+        vis.add_geometry(f"{cam}-color", camera_origin)
+        vis.add_3d_label(camera_origin.get_center(), cam)
 
-        depth_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0,0,0])
+        depth_origin = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1, origin=[0, 0, 0])
         world2depth = params["depth2world"]
         depth_origin.transform(world2depth)
         print(depth_origin.get_center())
@@ -71,6 +76,7 @@ def render_camera_poses(point, vis):
 
     add_mesh_sphere(point, vis, "sphere")
     # print(np.asarray(pcd.points))
+
 
 def render_single_transform(point, vis):
     cam = "cn02"
@@ -90,16 +96,18 @@ def render_single_transform(point, vis):
 
 if __name__ == "__main__":
     # draw ball at point
-    frame_id = 25
+    frame_id = 1100
     np.set_printoptions(suppress=True)
-    point = np.array([0.268629, -0.957795, 0.002394])
+    point = np.array([0.265301, -0.963982, 0.005958])
+
+    # new extrinsics
+    # point = np.array([0.249721, -0.005661, -0.974014])
     app = gui.Application.instance
     app.initialize()
     vis = o3d.visualization.O3DVisualizer("Open3D - 3D Text", 1024, 768)
     vis.show_settings = True
-    # render_camera_poses(point, vis)
+    render_camera_poses(point, vis)
     # render_single_transform(point, vis)
-    project_to_views(np.array(point).reshape(1, 3))
+    # project_to_views(point.reshape(1, 3))
     app.add_window(vis)
     app.run()
-
