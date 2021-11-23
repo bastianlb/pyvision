@@ -9,8 +9,7 @@ import cv2
 from utils import load_camera_params
 from utils import project_pose, homogenous_to_rot_trans
 
-# DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
-DATA_DIR = "/home/ana/Downloads/bodytracking"
+DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
 CAMERAS = ["cn01", "cn02", "cn03", "cn04", "cn05", "cn06"]
 
 

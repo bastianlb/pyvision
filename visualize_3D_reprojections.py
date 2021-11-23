@@ -1,6 +1,4 @@
 import os
-from copy import deepcopy
-
 import numpy as np
 import open3d as o3d
 import open3d.visualization.gui as gui
@@ -8,7 +6,7 @@ import cv2
 from visualize import render_camera_poses
 from utils import load_camera_params, unfold_camera_param
 
-DATA_DIR = "/home/ana/Downloads/bodytracking"
+DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
 CAMERAS = ["cn01", "cn02", "cn03", "cn04"]
 
 
@@ -45,7 +43,7 @@ def reproject_pixel_in_3D(camera, px_coords):
     # a pixel (x,y) in the color image can be accessed by (y,x) in the depth mask
     depth = depth_mask[px_coords[1]][px_coords[0]]/1000
     # the field of view of the depth camera is smaller than the one for the rgb images
-    # need to check whether we have a measurement for the given pixel 
+    # need to check whether we have a measurement for the given pixel
     if depth == 0.0:
         print(f"for camera:{camera} the pixel:{px_coords[0], px_coords[1]} has depth=0.0; cannot perform reprojection")
         return None
