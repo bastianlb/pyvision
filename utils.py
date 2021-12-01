@@ -6,6 +6,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import cv2
 
+
 def unfold_camera_param(camera):
     world2color = np.linalg.inv(camera["color2world"])
     R, T = homogenous_to_rot_trans(world2color)
@@ -19,6 +20,7 @@ def unfold_camera_param(camera):
     k = camera['k']
     p = camera['p']
     return R, T, f, c, k, p
+
 
 def rot_trans_to_homogenous(rot, trans):
     """
@@ -45,6 +47,7 @@ def homogenous_to_rot_trans(X):
 
     return X[:3, :3], X[:3, 3].reshape(3, 1)
 
+
 def rotation_to_homogenous(vec):
     rot_mat = Rotation.from_rotvec(vec)
     swap = np.identity(4)
@@ -52,6 +55,7 @@ def rotation_to_homogenous(vec):
     swap[:3, :3] = rot_mat.as_matrix()
     swap[3, 3] = 1
     return swap
+
 
 def load_camera_params(cam, dataset_root):
     scaling = 1000
@@ -106,6 +110,7 @@ def load_camera_params(cam, dataset_root):
     ds["color2world"] = color2world
     return ds
 
+
 def project_points_radial(x, R, T, K, k, p):
     """
     Args
@@ -125,6 +130,8 @@ def project_points_radial(x, R, T, K, k, p):
     xcam = R.dot(x.T) + T
     xcam = K @ xcam
 
+    # perspective projection to map into pixels:
+    # divide by the third component which represents the depth
     ypixel = xcam[:2] / (xcam[2]+1e-5)
     # print(xcam[2])
 
@@ -136,6 +143,7 @@ def project_points_radial(x, R, T, K, k, p):
     #                 (2, 1)) + np.outer(np.array([p[1], p[0]]).reshape(-1), r2)
     # ypixel = np.multiply(f, y) + c
     return ypixel.T
+
 
 def project_points_opencv(x, R, T, K, k, p):
     dist_coefs = np.concatenate([k[0:2].T[0], p.T[0], k[2:].T[0]])

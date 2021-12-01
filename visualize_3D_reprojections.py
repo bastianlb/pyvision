@@ -6,14 +6,15 @@ import cv2
 from visualize import render_camera_poses
 from utils import load_camera_params, unfold_camera_param
 
-DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
+DATA_DIR = "D:\Doc\Desktop\\bodytracking"
 CAMERAS = ["cn01", "cn02", "cn03", "cn04"]
 
 
 # invert the camera parameters for the reprojection into 3D
 def calculate_reprojection_params(params):
     # extrinsic parameters: R = rotation matrix, T = translation vector
-    # intrinsic parameters: f = focal length, c = principal point, k, p = distortion coefficients
+    # intrinsic parameters: f = focal length, c = principal point,
+    # k, p = distortion coefficients
     R, T, f, c, k, p = unfold_camera_param(params)
     K = np.array([f[0][0], 0, c[0][0],
                   0, f[1][0], c[1][0],
@@ -26,14 +27,14 @@ def calculate_reprojection_params(params):
     return K_inv, R_t, T_inv
 
 
-# convert a pixel coordinate into homogenous coordinates
+# convert a pixel coordinate into homogeneous coordinates
 def convert_to_hom_coords(point):
     point = np.append(point, 1)
     return point
 
 # reproject one pixel into the corresponding 3D point
 def reproject_pixel_in_3D(camera, px_coords):
-    # convert the pixel into homogenous coordinates
+    # convert the pixel into homogeneous coordinates
     px_coords = convert_to_hom_coords(px_coords)
     # read the depth mask
     file_id = str(frame_id).zfill(10)
