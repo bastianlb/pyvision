@@ -39,13 +39,15 @@ Rotation and translation are applied to convert a world point to the camera coor
 # visualize.py
 
 ## render_camera_poses()
-This is the result after running this function. The yellow sphere represents a 3D world point. The world consists of the point clouds gathered from all cameras. Also, the coordinate systems from all the cameras are displayed. The blue arrow represents how the respective camera sees the scene.
+![render_poses](assets/render_camera_poses.png)
+This is the result after running the render_camera_poses function. The yellow sphere represents a 3D world point. The world consists of the point clouds gathered from all cameras. Also, the coordinate systems from all the cameras are displayed. The blue arrow represents how the respective camera sees the scene.
 
 ## render_single_pose()
-After running this function, we can see the pointcloud and the yellow sphere in two coordinate systems: the depth camera 02 coordinate system and the world coordinate system
+![render_single_pose](assets/render_single_pose.png)
+After running this function, we can see the pointcloud and the yellow sphere in two coordinate systems: the depth camera 02 coordinate system and the world coordinate system.
 
 # visualize_3D_reprojections.py
-
+![vis_3d_reprojection](assets/visualize_3d_reprojections.png)
 This script provides a way to visualize 3D reprojections of corresponding pixels that represent "the center" of a person from one frame.  
 
 
