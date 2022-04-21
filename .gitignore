@@ -1,3 +1,9 @@
 .python-version
 .ipynb_checkpoints/
-*.jpg
+**/venv/*
+**/smpl_files/*.json
+**/output/*
+models/smpl/SMPL_FEMALE.pkl
+models/smpl/SMPL_MALE.pkl
+models/smpl/SMPL_NEUTRAL.pkl
+models/J_regressor_coco.npy

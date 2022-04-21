@@ -1,0 +1,5 @@
+chumpy
+numpy
+open3d
+opencv-python
+torch

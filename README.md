@@ -48,3 +48,23 @@ After running this function, we can see the pointcloud and the yellow sphere in 
 ![vis_3d_reprojection](assets/visualize_3d_reprojections.png)
 This script provides a way to visualize 3D reprojections of corresponding pixels that represent "the center" of a person from one frame.  
 
+# Visualize Smpl #
+
+Before you begin:
+
+1. Download: https://nextcloud.in.tum.de/index.php/s/PMmp3JayPDR9N6E and put it in the root folder of this project.
+
+2. Extract `data/smpl_files/smpl_files.tar.gz` to get the output of *EasyMocap*. It represents all SMPL-Models of 196 frames.
+    This index starts at frame 2000 with an increment of 5. That is, 0 -> 2000, 1 -> 2005, 2 -> 2010, ...
+
+To run the file, execute: `python run/visualize_smpl.py`.
+
+This will recreate the SMPL Model in the 3D space (white) and its respective 17 COCO key points (yellow). 
+It will also generate images:
+
+- `output/vertices_on_img/`: All vertices of the mesh projected on the image
+- `output/smpl_on_image/`: The smpl model projected onto the image 
+  > ⚠️ Still bugged
+
+
+

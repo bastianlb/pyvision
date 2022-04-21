@@ -165,7 +165,7 @@ def project_pose(x, camera):
     loc2d_opencv = project_points_opencv(x, R, T, K, k, p)
     loc2d = project_points_radial(x, R, T, K, k, p)
 
-    print(camera["id"])
-    print("------------")
-    print(f" loc2d -> {loc2d} \n opencv -> {loc2d_opencv}")
+    # print(camera["id"])
+    # print("------------")
+    # print(f" loc2d -> {loc2d} \n opencv -> {loc2d_opencv}")
     return loc2d
