@@ -88,8 +88,11 @@ This will recreate the SMPL Model in the 3D space (white) and its respective 17 
 It will also generate images:
 
 - `output/vertices_on_img/`: All vertices of the mesh projected on the image
-- `output/smpl_on_image/`: The smpl model projected onto the image 
+- `output/open3d_render_on_image/`: The smpl model projected onto the image with `open3d.visualization.rendering`
   > ⚠️ Still bugged
+- `output/pyrender_on_image/`: The smp model projected onto image `pyrender`
+  > ⚠️ Also bugged :(
+
 
 
 

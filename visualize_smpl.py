@@ -7,7 +7,7 @@ import open3d.visualization.gui as gui
 import cv2
 import pickle
 
-from utils import load_camera_params
+from utils import load_camera_params, unfold_camera_param
 from utils import project_pose, homogenous_to_rot_trans
 
 import numpy as np
@@ -22,8 +22,9 @@ import pickle
 import trimesh
 import open3d.visualization.rendering as rendering
 import shutil
+import pyrender
 
-coco_joints_def = {0: 'nose',
+coco_joints_def = {0: 'Nose',
                    1: 'Leye', 2: 'Reye', 3: 'Lear', 4: 'Rear',
                    5: 'Lsho', 6: 'Rsho',
                    7: 'Lelb', 8: 'Relb',
@@ -71,7 +72,7 @@ def read_smpl(filename):
 
 def read_smpl_all(path='data/smpl_files/'):
     results = sorted(glob(os.path.join(path, '*.json')))
-    # result is list of dics
+    # result is list of dicts
     datas = []
     for result in results:
         data = read_smpl(result)
@@ -113,7 +114,7 @@ def project_to_views(points, frame_id):
             # x, y = np.int16(np.round(loc2d - kinect_offset))
             if 0 < int(loc2d[0]) < width and 0 < int(loc2d[1]) < height:
                 cv2.circle(color, (int(loc2d[0]), int(loc2d[1])), 1, (255, 255, 255), 1)
-        cv2.imwrite(os.path.join(output_dir, cam + "_test.jpg"), color)
+        cv2.imwrite(os.path.join(output_dir, cam + f'Frame_.{frame_id}.jpg'), color)
 
 
 # add a placeholder sphere
@@ -174,6 +175,7 @@ def render_camera_poses(points, vis, frame_id):
         for j, point in enumerate(joints):
             add_mesh_sphere(point, vis, f"{coco_joints_def[j]}_Person: {i}")
 
+
 def render_smpl(frame_id, vis=None):
     # translates the frame_id to index
     data_id = (frame_id - 2000) // 5
@@ -197,8 +199,10 @@ def render_smpl(frame_id, vis=None):
     
     # projects vertices to 2d image
     project_to_views(np.asarray(model.vertices), frame_id)
-    # project smpl onto 2d image
+    # project smpl onto 2d image with open3d render
     project_smpl(frame_id, model)
+    # project smpl onto 2d image with pyrender
+    project_smpl_pyrender(frame_id, model)
 
     # project to 3D space
     if vis != None:
@@ -213,11 +217,99 @@ def render_smpl(frame_id, vis=None):
             vis.add_geometry(f'Person {i}', model)
 
 
+# WARNING: Bugged
+# rendering for camera 01 with pyrender
+# From: https://github.com/alon1samuel/Visualize3DHumanModels
+def project_smpl_pyrender(frame_id, mesh):
+    output_dir = prepare_out_dirs(dataDirs=['pyrender_on_img'])[0]
+    img = cv2.imread(os.path.join(DATA_DIR, 'cn01', '0000002150_color.jpg'), -1)
 
 
-# This is only implemented for camera 01
+    fx = 1.02595850e+03
+    fy = 1.02400476e+03
+    cx = 1.02028540e+03
+    cy = 7.76271240e+02
+
+    R = np.array(
+        [[-0.66923718,  0.74202016, -0.03908604],
+        [ 0.50586555,  0.4164543 , -0.75542432],
+        [-0.54426251, -0.52533031, -0.65406911]]
+    )
+
+    T = np.array(
+        [[-0.22217233],
+        [-0.29406874],
+        [3.90767329]]
+    )
+  
+    vertices = np.asarray(mesh.vertices)
+    faces = np.asarray(mesh.triangles)
+
+    out_mesh = trimesh.Trimesh(vertices, faces)
+    rot = trimesh.transformations.rotation_matrix(
+        np.radians(180), [1, 0, 0])
+    out_mesh.apply_transform(rot)
+
+    # Create the camera object
+    H, W, _ = img.shape
+
+    baseColorFactor = (1.0, 1.0, 0.95, 1.0)
+
+    material = pyrender.MetallicRoughnessMaterial(
+        metallicFactor=0.0,
+        alphaMode='OPAQUE',
+        baseColorFactor=baseColorFactor)
+    mesh = pyrender.Mesh.from_trimesh(
+        out_mesh,
+        material=material)
+
+    scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0],
+                           ambient_light=(0.3, 0.3, 0.3))
+    scene.add(mesh, 'mesh')
+
+    camera_center = np.array([cx, cy])
+    camera_transl = T.flatten()
+    # Equivalent to 180 degrees around the y-axis. Transforms the fit to
+    # OpenGL compatible coordinate system.
+    camera_transl[0] *= -1.0
+
+    camera_pose = np.eye(4)
+    # camera_pose[:3, :3] = R
+    camera_pose[:3, 3] = camera_transl
+
+    camera = pyrender.camera.IntrinsicsCamera(
+        fx=fx, fy=fy,
+        cx=camera_center[0], cy=camera_center[1])
+    scene.add(camera, pose=camera_pose)
+
+    # Get the lights from the viewer
+    # light_nodes = monitor.mv.viewer._create_raymond_lights()
+    # for node in light_nodes:
+    #     scene.add_node(node)
+
+    r = pyrender.OffscreenRenderer(viewport_width=W,
+                                   viewport_height=H,
+                                   point_size=1.0)
+
+    color, _ = r.render(scene, flags=pyrender.RenderFlags.RGBA)
+    color = color.astype(np.float32) / 255.0
+
+    valid_mask = (color[:, :, -1] > 0)[:, :, np.newaxis]
+
+    output_img = 255 - ((255 - color[:, :, :-1]) * valid_mask +
+                        (1 - valid_mask) * img)
+
+    output_img = (output_img * 255).astype(np.uint8)
+
+    cv2.imwrite(os.path.join(output_dir, f'Frame_{frame_id}.jpg'), output_img)
+
+
+
+
+# WARNING: Bugged
+# This is only implemented for camera 01 with open3d.visualization.rendering
 def project_smpl(frame_id, mesh):
-    output_dir = prepare_out_dirs(dataDirs=['smpl_on_image'])[0]
+    output_dir = prepare_out_dirs(dataDirs=['open3d_render_on_img'])[0]
     background_img = cv2.imread(os.path.join(DATA_DIR, 'cn01', '0000002150_color.jpg'), -1)
 
     H, W, _ = background_img.shape
@@ -249,10 +341,10 @@ def project_smpl(frame_id, mesh):
     render.scene.camera.set_projection(camMat, near_plane, far_plane, W, H)
 
     # Rotation matrix
-    R = np.array(
-        [[-0.66923718,  0.74202016, -0.03908604],
-       [ 0.50586555,  0.4164543 , -0.75542432],
-       [-0.54426251, -0.52533031, -0.65406911]]
+    R = np.array([
+        [-0.66923718,  0.74202016, -0.03908604],
+        [ 0.50586555,  0.4164543 , -0.75542432],
+        [-0.54426251, -0.52533031, -0.65406911]]
     )
 
     # Translation matrix
@@ -298,10 +390,7 @@ def project_smpl(frame_id, mesh):
         background_img[y1:y2, x1:x2, c] = (alpha_s * foreground_img[:, :, c] +
                                 alpha_l * background_img[y1:y2, x1:x2, c])
 
-    cv2.imwrite(os.path.join(output_dir, "test.png"), background_img)
-
-
-
+    cv2.imwrite(os.path.join(output_dir, f'Frame_{frame_id}.png'), background_img)
 
 
 
@@ -311,6 +400,8 @@ def main():
     # 3D - key points detected by voxel pose
     with open('data/pred_voxelpose.pkl', 'rb') as f:
         preds = pickle.load(f)
+
+    vis = None
 
     # 3d keypoints predicted with voxelpose of this frame
     points_ = preds[frame_id]
@@ -323,6 +414,7 @@ def main():
     render_camera_poses(points_, vis, frame_id)
 
     # renders smpl on 2d image and 3d space
+    # if vis != None then it will produce smpl in 3d point cloud
     render_smpl(frame_id, vis)
 
     app.add_window(vis)
