@@ -53,8 +53,33 @@ This script provides a way to visualize 3D reprojections of corresponding pixels
 Before you begin:
 
 1. Download: https://nextcloud.in.tum.de/index.php/s/PMmp3JayPDR9N6E and put it in the root folder of this project.
+As such:
+    ```.
+    ├── README.md
+    ├── analyze_timestamps.ipynb
+    ├── assets
+    ├── calibrate.py
+    ├── concat_pointclouds.py
+    ├── data
+    │   ├── holistic_or
+    │   ├── pred_voxelpose.pkl
+    │   └── smpl_files
+    ├── models
+    │   ├── J_regressor_coco.npy
+    │   └── smpl
+    ├── requirements.txt
+    ├── rgbd_frames.pdf
+    ├── smplmodel
+    ├── superimpose.py
+    ├── utils.py
+    ├── visualize.py
+    ├── visualize_3D_reprojections.py
+    ├── visualize_smpl.py
+    └── warp.py 
+    ```
 
-2. Extract `data/smpl_files/smpl_files.tar.gz` to get the output of *EasyMocap*. It represents all SMPL-Models of 196 frames.
+
+1. Extract `data/smpl_files/smpl_files.tar.gz` to get the output of *EasyMocap*. It represents all SMPL-Models of 196 frames.
     This index starts at frame 2000 with an increment of 5. That is, 0 -> 2000, 1 -> 2005, 2 -> 2010, ...
 
 To run the file, execute: `python run/visualize_smpl.py`.
