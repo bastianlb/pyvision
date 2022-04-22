@@ -77,10 +77,13 @@ As such:
     ├── visualize_smpl.py
     └── warp.py 
     ```
+    It contains the joint regressor from the SMPL vertices to the COCO joints and the `SMPL-Neutral` model.
 
 
 1. Extract `data/smpl_files/smpl_files.tar.gz` to get the output of *EasyMocap*. It represents all SMPL-Models of 196 frames.
-    This index starts at frame 2000 with an increment of 5. That is, 0 -> 2000, 1 -> 2005, 2 -> 2010, ...
+    This index starts at frame 2000 with an increment of 5. That is, 0 -> 2000, 1 -> 2005, 2 -> 2010, ... 
+  <br>
+  Generated with [EasyMocap](https://github.com/zju3dv/EasyMocap)
 
 To run the file, execute: `python run/visualize_smpl.py`.
 
@@ -88,10 +91,7 @@ This will recreate the SMPL Model in the 3D space (white) and its respective 17 
 It will also generate images:
 
 - `output/vertices_on_img/`: All vertices of the mesh projected on the image
-- `output/open3d_render_on_image/`: The smpl model projected onto the image with `open3d.visualization.rendering`
-  > ⚠️ Still bugged
-- `output/pyrender_on_image/`: The smp model projected onto image `pyrender`
-  > ⚠️ Also bugged :(
+- `output/pyrender_on_image/`: The SMPL model projected onto image [`pyrender`](https://pyrender.readthedocs.io/en/latest/)
 
 
 

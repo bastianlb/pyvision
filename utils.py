@@ -107,6 +107,8 @@ def load_camera_params(cam, dataset_root):
     color2world = depth2world @ np.linalg.inv(depth2color)
 
     R, T = homogenous_to_rot_trans(np.linalg.inv(color2world))
+    ds['R'] = R
+    ds['T'] = T
     ds["color2world"] = color2world
     return ds
 

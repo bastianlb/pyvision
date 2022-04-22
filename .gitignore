@@ -8,3 +8,4 @@ models/smpl/SMPL_MALE.pkl
 models/smpl/SMPL_NEUTRAL.pkl
 models/J_regressor_coco.npy
 **/.vscode/*
+**/__pycache__/**
