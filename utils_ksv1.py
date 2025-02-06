@@ -5,7 +5,6 @@ import open3d as o3d
 import numpy as np
 from scipy.spatial.transform import Rotation
 import cv2
-import torch
 
 
 def unfold_camera_param(camera):
@@ -153,23 +152,23 @@ def project_points_radial(x, R, T, K, k, p):
     y[0] = xcam[0] / (xcam[2] + 1e-8)
     y[1] = xcam[1] / (xcam[2] + 1e-8)
     # Compute radial distance squared (r^2)
-    #r2 = np.sum(y**2, axis=0)  # Shape: (N,)
+    r2 = np.sum(y**2, axis=0)  # Shape: (N,)
 
     # Apply radial distortion
-    #radial = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3  # Shape: (N,)
+    radial = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3  # Shape: (N,)
 
     # Apply tangential distortion
-    #x_tangential = 2 * p[0] * y[0] * y[1] + p[1] * (r2 + 2 * y[0]**2)
-    #y_tangential = p[0] * (r2 + 2 * y[1]**2) + 2 * p[1] * y[0] * y[1]
+    x_tangential = 2 * p[0] * y[0] * y[1] + p[1] * (r2 + 2 * y[0]**2)
+    y_tangential = p[0] * (r2 + 2 * y[1]**2) + 2 * p[1] * y[0] * y[1]
 
     # Combine distortions
-    #y_distorted = np.vstack([
-    #    y[0] * radial + x_tangential,
-    #    y[1] * radial + y_tangential
-    #])  # Shape: (2, N)
+    y_distorted = np.vstack([
+        y[0] * radial + x_tangential,
+        y[1] * radial + y_tangential
+    ])  # Shape: (2, N)
 
     # Transform to pixel coordinates using intrinsic matrix
-    ypixel = K[:2, :2] @ y + K[:2, 2].reshape(-1, 1)  # Shape: (2, N)
+    ypixel = K[:2, :2] @ y_distorted + K[:2, 2].reshape(-1, 1)  # Shape: (2, N)
 
     return ypixel.T 
 
@@ -191,11 +190,10 @@ def project_points_opencv(x, R, T, K, k, p):
 def project_pose(x, camera):
     R, T, f, c, k, p = unfold_camera_param(camera)
 
-    #K = np.array([f[0][0], 0, c[0][0],
-    #              0, f[1][0], c[1][0],
-    #              0, 0, 1])
-    #K = K.reshape(3,3)
-    K = camera['new_intrinsics']
+    K = np.array([f[0][0], 0, c[0][0],
+                  0, f[1][0], c[1][0],
+                  0, 0, 1])
+    K = K.reshape(3,3)
     loc2d_opencv = project_points_opencv(x, R, T, K, k, p)
     loc2d = project_points_radial(x, R, T, K, k, p)
 
@@ -291,14 +289,6 @@ def load_cam_infos(take_path: Path) -> dict:
         intrinsics[2, 1] = 0
         intrinsics[2, 2] = 1
 
-        new_intrin = cam_info['color_parameters']['new_camera_matrix']
-
-        intrinsics = np.array([
-        [new_intrin[0][0], 0, new_intrin[0][2]],
-        [0, new_intrin[1][1], new_intrin[1][2]],
-        [0,  0,  1]
-        ])
-
         # Load extrinsics
         extrinsics = load_transform_matrix(cam_info['camera_pose']['translation'], cam_info['camera_pose']['rotation'])
         depth_extrinsics = extrinsics.copy()
@@ -348,7 +338,7 @@ def load_cam_infos(take_path: Path) -> dict:
         ROTATE_22_5_X = rotation_to_homogenous(-np.pi / 8 * np.array([1, 0, 0]))
         ROTATE_45_Y = rotation_to_homogenous(-np.pi / 4 * np.array([0, 1, 0]))
 
-        extrinsics = extrinsics @ YZ_FLIP #YZ_SWAP @ YZ_FLIP @ extrinsics @ YZ_FLIP  # @ XZ_SWAP @ XY_SWAP
+        extrinsics = extrinsics #YZ_SWAP @ YZ_FLIP @ extrinsics @ YZ_FLIP  # @ XZ_SWAP @ XY_SWAP
         #print(f"Camera {cam_id} - After Additional Transformations:\n", extrinsics)
 
         # Compute color2world and depth2world
@@ -362,7 +352,6 @@ def load_cam_infos(take_path: Path) -> dict:
 
         camera_parameters[f'camera0{cam_id}'] = {
             'intrinsics': intrinsics,
-            'new_intrinsics': new_intrinsics,
             'extrinsics': extrinsics,
             'fov_x': color_params['fov_x'],
             'fov_y': color_params['fov_y'],
@@ -407,15 +396,18 @@ def project_to_2d(point_3d, camera):
     k = camera['radial_params']
     p = camera['tangential_params']
     
-    # # Construct intrinsic matrix
-    intrinsic_matrix = camera['new_intrinsics']
-    #print(intrinsic_matrix)
-
+    # Construct intrinsic matrix
+    intrinsic_matrix = np.array([
+        [fx, 0, c_x],
+        [0, fy, c_y],
+        [0,  0,  1]
+    ])
+    
     # Convert point to homogeneous coordinates
     point_3d_hom = np.append(point_3d, 1)  # Shape: (4,)
     
     # Apply extrinsic matrix to convert to camera coordinates
-    point_cam = extrinsic_matrix @ point_3d_hom  # Shape: (4,)
+    point_cam = np.dot(extrinsic_matrix, point_3d_hom)  # Shape: (4,)
     point_cam = point_cam[:3]  # Keep only x, y, z
     
     # Project to normalized camera coordinates
@@ -423,51 +415,23 @@ def project_to_2d(point_3d, camera):
     y_n = point_cam[1] / (point_cam[2] + 1e-8)
     
     # Compute radial distance squared (r^2)
-    #r2 = x_n**2 + y_n**2
+    r2 = x_n**2 + y_n**2
     
     # Apply radial distortion
-    #radial_distortion = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3
-    #x_radial = x_n * radial_distortion
-    #y_radial = y_n * radial_distortion
+    radial_distortion = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3
+    x_radial = x_n * radial_distortion
+    y_radial = y_n * radial_distortion
     
     # Apply tangential distortion
-    #x_tangential = 2 * p[0] * x_n * y_n + p[1] * (r2 + 2 * x_n**2)
-    #y_tangential = p[0] * (r2 + 2 * y_n**2) + 2 * p[1] * x_n * y_n
+    x_tangential = 2 * p[0] * x_n * y_n + p[1] * (r2 + 2 * x_n**2)
+    y_tangential = p[0] * (r2 + 2 * y_n**2) + 2 * p[1] * x_n * y_n
     
     # Combine distortions
-    #x_distorted = x_radial + x_tangential
-    #y_distorted = y_radial + y_tangential
+    x_distorted = x_radial + x_tangential
+    y_distorted = y_radial + y_tangential
     
     # Convert to pixel coordinates using intrinsics
-    point_img = intrinsic_matrix @ [x_n, y_n, 1]
+    point_img = intrinsic_matrix[:2, :2] @ [x_n, y_n] + intrinsic_matrix[:2, 2]  # Normalize by z
+    
     # Return 2D point in integer pixel coordinates
-    return point_img[:2].astype(np.int32)
-
-def project_3d_to_2d(points_3d, intrinsics, extrinsics):
-    """
-    Project a 3D point cloud to 2D using camera intrinsics and extrinsics.
-
-    Parameters:
-    - points_3d: The 3D point cloud to project (tensor).
-    - intrinsics: The camera intrinsic matrix (tensor).
-    - extrinsics: The camera extrinsic matrix (tensor).
-
-    Returns:
-    - 2D coordinates of the projected points (tensor).
-    """
-    if not isinstance(intrinsics, torch.Tensor):
-        intrinsics = torch.tensor(intrinsics, dtype=torch.float32)
-    if not isinstance(extrinsics, torch.Tensor):
-        extrinsics = torch.tensor(extrinsics, dtype=torch.float32)
-    
-    ones = torch.ones((points_3d.shape[0], 1), device=points_3d.device)
-    points_3d_homogeneous = torch.cat([points_3d, ones], dim=1)
-    
-    # Convert from world to camera coordinates
-    points_3d_camera = torch.mm(torch.inverse(extrinsics), points_3d_homogeneous.t()).t()[:, :3]
-    
-    # Project to 2D
-    points_2d = torch.mm(intrinsics, points_3d_camera.t()).t()
-    points_2d = points_2d[:, :2] / points_2d[:, 2].unsqueeze(-1)
-    
-    return points_2d
+    return point_img.astype(np.int32)

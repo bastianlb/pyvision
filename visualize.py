@@ -5,35 +5,44 @@ import numpy as np
 import open3d as o3d
 import open3d.visualization.gui as gui
 import cv2
+import torch
 
-from utils import load_camera_params
-from utils import project_pose, homogenous_to_rot_trans
+from utils import load_camera_params, load_cam_infos
+from utils import project_pose, homogenous_to_rot_trans, project_to_2d, project_3d_to_2d
 
-DATA_DIR = "D:\Doc\Desktop\\bodytracking"
-CAMERAS = ["cn01", "cn02", "cn03", "cn04", "cn05", "cn06"]
+DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
+CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 
 # project a 3D point in the world to the 2D views
 def project_to_views(point):
     # cam 1 [750, 640]
     for cam in CAMERAS[:]:
-        file_id = str(frame_id).zfill(10)
-        params = load_camera_params(cam, DATA_DIR)
-        loc2d = project_pose(point, params)[0]
-        fpath = os.path.join(DATA_DIR, cam, f"{file_id}_color.jpg")
+        file_id = str(frame_id).zfill(6)
+        params = load_cam_infos(DATA_DIR)[cam]
+        #print(params['intrinsics'])
+        #loc2d = project_pose(point, params)
+        intrinsics = params['new_intrinsics']
+        extrinsics = params['color2world']
+        torch_point = torch.tensor(point, dtype=torch.float32)
+        loc2d = project_3d_to_2d(torch_point, intrinsics, extrinsics)
+        print(loc2d)
+        loc2d =loc2d[0]
+        fpath = os.path.join(DATA_DIR, "color", f"color_{file_id}_{cam}_undistorted.jpg")
         color = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
         if color is None:
             print("File not found: ", fpath)
         # shape is in form: [height, width, channel]
         height, width, _ = color.shape
         # y-val <-> height x-val <-> width
-        kinect_offset = np.array([0.5, 0.5])
-        x, y = np.int16(np.round(loc2d - kinect_offset))
+        orbbec_offset = np.array([0.0, 0.0])
+        #x, y = np.int16(np.round(loc2d - orbbec_offset))
+        x, y = np.int16(loc2d)
         if 0 < x and x < width and 0 < y and y < height:
             print("Point present in image")
-            print("\n")
+
             # azure kinect uses reverse indexing
-            cv2.circle(color, (x, y), 1, (0, 255, 0), 1)
+            cv2.circle(color, (x, y), 1, (0, 0, 255), 10)
             cv2.imwrite(cam + "_test.jpg", color)
 
 
@@ -55,14 +64,15 @@ def render_camera_poses(points, vis, frame_id):
     mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0, 0, 0])
     vis.add_geometry("coordinate_frame", mesh_frame)
     for cam in CAMERAS:
-        file_id = str(frame_id).zfill(4)
-        fpath = os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply")
+        file_id = str(frame_id).zfill(6)
+#        fpath = os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply")
+        fpath = os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply")
         if not os.path.exists(fpath):
             print("File does not exist: ", fpath)
             continue
         ply = o3d.io.read_point_cloud(fpath)
         # each camera has its own extrinsics w.r.t. to the world and its own intrinsics
-        params = load_camera_params(cam, DATA_DIR)
+        params = load_cam_infos(DATA_DIR)[cam]
         # ply.transform(params["depth2world"])
         vis.add_geometry(f"{cam}-ply", ply)
 
@@ -97,12 +107,12 @@ def render_camera_poses(points, vis, frame_id):
 
 # display a 3D point in the coordinate system of a depth camera and also in the world coordinate system
 def render_single_transform(point, vis):
-    cam = "cn02"
-    file_id = str(frame_id).zfill(4)
+    cam = "camera02"
+    file_id = str(frame_id).zfill(6)
     # point cloud in world coordinate system
-    ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply"))
+    ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply"))
     vis.add_geometry(f"{cam}-ply-camera", ply)
-    params = load_camera_params(cam, DATA_DIR)
+    params = load_cam_infos(DATA_DIR)[cam]
     depth2world = params["depth2world"]  # this is actually world2depth
     # extrinsics of the depth camera
     R, T = homogenous_to_rot_trans(depth2world)
@@ -122,17 +132,29 @@ def render_single_transform(point, vis):
 
 if __name__ == "__main__":
     # draw ball at point
-    frame_id = 1100
+    frame_id = 5
     np.set_printoptions(suppress=True)
-    point = np.array([[0.265301, -0.963982, 0.005958]])
+    
+    #point = np.array([[-0.795794, -0.516614, -0.046237]])
+
+    #point = np.array([[0.163907, 0.738747, -0.460022]])
+    #point = np.array([[0.023019, -0.45939, -0.227529]])
+    #point = np.array([[-0.755053, -0.522893, -0.044084]])
+
+    #point = np.array([[-0.805985, -0.252734, 0.53880]])
+    #point = np.array([[0.136309, -0.746423, 0.419467]])
+    
+    #point = np.array([[-0.764970, 0.162119, -0.601755]])
+    point = np.array([[-0.418605, -1.447534, -0.467637]])
+    #point = np.array([[0.009305, -0.458736, -0.221783]])
     # new extrinsics
     # point = np.array([0.249721, -0.005661, -0.974014])
     app = gui.Application.instance
     app.initialize()
     vis = o3d.visualization.O3DVisualizer("Open3D - 3D Text", 1024, 768)
     vis.show_settings = True
-    # render_camera_poses(point, vis, frame_id)
-    render_single_transform(point, vis)
-    # project_to_views(point.reshape(1, 3))
+    render_camera_poses(point, vis, frame_id)
+    #render_single_transform(point, vis)
+    project_to_views(point.reshape(1, 3))
     app.add_window(vis)
     app.run()

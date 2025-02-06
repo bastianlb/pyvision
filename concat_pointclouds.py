@@ -4,16 +4,18 @@ import numpy as np
 import open3d as o3d
 import open3d.visualization.gui as gui
 
-DATA_DIR = "/data/develop/export_mkv_k4a/pointcloud_export"
-CAMERAS = ["cn01", "cn02", "cn03", "cn04", "cn05", "cn06"]
+print(o3d.__version__)
+
+DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/pointclouds_e57/"
+CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 
 def render_camera_poses(vis):
     mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2, origin=[0, 0, 0])
     vis.add_geometry("coordinate_frame", mesh_frame)
     for cam in CAMERAS:
-        file_id = str(frame_id).zfill(4)
-        fpath = os.path.join(DATA_DIR, cam, f"{file_id}_pointcloud.ply")
+        file_id = str(frame_id).zfill(6)
+        fpath = os.path.join(DATA_DIR, f"pointcloud_{file_id}_{cam}.ply")
         if not os.path.exists(fpath):
             print("File does not exist: ", fpath)
             continue
@@ -22,7 +24,7 @@ def render_camera_poses(vis):
 
 
 if __name__ == "__main__":
-    frame_id = 1100
+    frame_id = 5
     np.set_printoptions(suppress=True)
 
     # new extrinsics

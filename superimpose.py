@@ -4,7 +4,7 @@ import numpy.ma as ma
 import matplotlib.pyplot as plt
 import cv2
 
-DATA_DIR = "/data/develop/export_mkv_k4a/test_system/"
+DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
 
 def plot_cam_grid(axes, cameras, frames):
     # display only for every other column
@@ -27,14 +27,14 @@ def plot_cam_grid(axes, cameras, frames):
                 ax.axis('off')
                 continue
 
-            file_id = str(frame).zfill(10)
-            fpath = os.path.join(DATA_DIR, cam, f"{file_id}_color.jpg")
+            file_id = str(frame).zfill(6)
+            fpath = os.path.join(DATA_DIR, "color", f"color_{file_id}_{cam}.jpg")
             color = cv2.imread(fpath,
                                cv2.IMREAD_UNCHANGED)
             if color is None:
                 raise Exception(f"Invalid filename {fpath}")
             color = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
-            fpath = os.path.join(DATA_DIR, cam, f"{file_id}_rgbd.tiff")
+            fpath = os.path.join(DATA_DIR, "depth", f"depth_{file_id}_{cam}.tiff")
             mask = cv2.imread(fpath,
                               cv2.IMREAD_GRAYSCALE)
 
@@ -53,8 +53,8 @@ def plot_cam_grid(axes, cameras, frames):
 
 
 if __name__ == "__main__":
-    cameras_1 = ['cn01', 'cn02', 'cn03']
-    cameras_2 = ['cn04', 'cn05', 'cn06']
+    cameras_1 = ['camera01', 'camera02']
+    cameras_2 = ['camera03', 'camera04']
     # frames = [500, 700, 900]
     frames = [5, 505, 1005]
 

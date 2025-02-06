@@ -6,8 +6,8 @@ import cv2
 from visualize import render_camera_poses
 from utils import load_camera_params, unfold_camera_param
 
-DATA_DIR = "D:\Doc\Desktop\\bodytracking"
-CAMERAS = ["cn01", "cn02", "cn03", "cn04"]
+DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
+CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 
 # invert the camera parameters for the reprojection into 3D
@@ -36,13 +36,22 @@ def convert_to_hom_coords(point):
 def reproject_pixel_in_3D(camera, px_coords):
     # convert the pixel into homogeneous coordinates
     px_coords = convert_to_hom_coords(px_coords)
+    print(px_coords)
     # read the depth mask
-    file_id = str(frame_id).zfill(10)
-    fpath = os.path.join(DATA_DIR, camera, f"{file_id}_rgbd.tiff")
+    file_id = str(frame_id).zfill(6)
+    fpath = os.path.join(DATA_DIR, "depth", f"depth_{file_id}_{camera}.tiff")
     depth_mask = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
     # depth_mask is flipped
     # a pixel (x,y) in the color image can be accessed by (y,x) in the depth mask
-    depth = depth_mask[px_coords[1]][px_coords[0]]/1000
+    print(depth_mask.shape)
+    scaled_x = int(px_coords[0] * (depth_mask.shape[1] / 1920))
+    scaled_y = int(px_coords[1] * (depth_mask.shape[0] / 1080))
+
+# Ensure scaled coordinates are within bounds
+    if 0 <= scaled_x < depth_mask.shape[1] and 0 <= scaled_y < depth_mask.shape[0]:
+        depth = depth_mask[scaled_y][scaled_x] / 1000
+    else:
+        print("Scaled coordinates out of bounds:", scaled_x, scaled_y)
     # the field of view of the depth camera is smaller than the one for the rgb images
     # need to check whether we have a measurement for the given pixel
     if depth == 0.0:
@@ -72,22 +81,23 @@ def construct_world_points(pixels):
 # draw circles on the position of the pixels for a better intuition on where the 3D reprojections should end up
 def draw_centers():
     for cam in CAMERAS[:]:
-        file_id = str(frame_id).zfill(10)
-        fpath = os.path.join(DATA_DIR, cam, f"{file_id}_color.jpg")
+        file_id = str(frame_id).zfill(6)
+        fpath = os.path.join(DATA_DIR, "color", f"color_{file_id}_{cam}.jpg")
         image = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
         if image is None:
             print("File not found: ", fpath)
         cv2.circle(image, (pixels[cam][0], pixels[cam][1]), 5, (255, 255, 255), 5)
-        cv2.imwrite(cam + "_frame_1100_center.jpg", image)
+        print(image.shape) 
+        cv2.imwrite(cam + "_frame_25_center.jpg", image)
 
 
 if __name__ == "__main__":
-    frame_id = 1100
-    # center pixels of a person in the frame 1100
-    pixels = {"cn01": np.array([680, 718]),
-              "cn02": np.array([1695, 637]),
-              "cn03": np.array([1692, 496]),
-              "cn04": np.array([1473, 540])
+    frame_id = 5
+    # center pixels of a person in the frame 5
+    pixels = {"camera01": np.array([320, 600]),
+              "camera02": np.array([267, 171]),
+              "camera03": np.array([1488, 552]),
+              "camera04": np.array([799, 869])
               }
     # visualize the centers on the 2D images
     draw_centers()
