@@ -1,6 +1,7 @@
 import os.path as osp
 import json
 import open3d as o3d
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -143,35 +144,26 @@ def project_points_radial(x, R, T, K, k, p):
     """
     # Number of points
     n = x.shape[0]
-    
-    # Convert points from world to camera coordinates
-    xcam = R.dot(x.T) + T  # Shape: (3, N)
+    x = x
+    # x = np.multiply([-1, 1, 1], x)
+    # world2camera
+    # https://www-users.cs.umn.edu/~hspark/CSci5980/Lec2_ProjectionMatrix.pdf
+    xcam = R.dot(x.T) + T
+    xcam = K @ xcam
 
-    # Perspective projection to map into normalized camera coordinates
-    #y = xcam[:2] / (xcam[2] + 1e-8)  # Shape: (2, N)
-    y = np.zeros((2, n))
-    y[0] = xcam[0] / (xcam[2] + 1e-8)
-    y[1] = xcam[1] / (xcam[2] + 1e-8)
-    # Compute radial distance squared (r^2)
-    #r2 = np.sum(y**2, axis=0)  # Shape: (N,)
+    # perspective projection to map into pixels:
+    # divide by the third component which represents the depth
+    ypixel = xcam[:2] / (xcam[2] + 1e-5)
+    # print(xcam[2])
 
-    # Apply radial distortion
-    #radial = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3  # Shape: (N,)
-
-    # Apply tangential distortion
-    #x_tangential = 2 * p[0] * y[0] * y[1] + p[1] * (r2 + 2 * y[0]**2)
-    #y_tangential = p[0] * (r2 + 2 * y[1]**2) + 2 * p[1] * y[0] * y[1]
-
-    # Combine distortions
-    #y_distorted = np.vstack([
-    #    y[0] * radial + x_tangential,
-    #    y[1] * radial + y_tangential
-    #])  # Shape: (2, N)
-
-    # Transform to pixel coordinates using intrinsic matrix
-    ypixel = K[:2, :2] @ y + K[:2, 2].reshape(-1, 1)  # Shape: (2, N)
-
-    return ypixel.T 
+    # r2 = np.sum(y**2, axis=0)
+    # radial = 1 + np.einsum('ij,ij->j', np.tile(k, (1, n)),
+    #                        np.array([r2, r2**2, r2**3]))
+    # tan = p[0] * y[1] + p[1] * y[0]
+    # y = y * np.tile(radial + 2 * tan,
+    #                 (2, 1)) + np.outer(np.array([p[1], p[0]]).reshape(-1), r2)
+    # ypixel = np.multiply(f, y) + c
+    return ypixel.T
 
 
 def project_points_opencv(x, R, T, K, k, p):
@@ -199,25 +191,10 @@ def project_pose(x, camera):
     loc2d_opencv = project_points_opencv(x, R, T, K, k, p)
     loc2d = project_points_radial(x, R, T, K, k, p)
 
-    #print(camera["id"])
-    #print("------------")
-    #print(f" loc2d -> {loc2d} \n opencv -> {loc2d_opencv}")
+    print(camera["id"])
+    print("------------")
+    print(f" loc2d -> {loc2d} \n opencv -> {loc2d_opencv}")
     return loc2d
-
-
-
-
-
-
-
-
-
-
-
-from pathlib import Path
-from scipy.spatial.transform import Rotation
-import json
-import numpy as np
 
 
 def load_rotation_matrix(rot: dict) -> np.ndarray:
@@ -235,47 +212,6 @@ def extract_intrinsics_matrix(intrinsics_json: dict) -> np.ndarray:
     return np.asarray([[intrinsics_json['m00'], intrinsics_json['m10'], intrinsics_json['m20']],
                        [intrinsics_json['m01'], intrinsics_json['m11'], intrinsics_json['m21']],
                        [intrinsics_json['m02'], intrinsics_json['m12'], intrinsics_json['m22']]])
-
-def rotation_to_homogenous(vec):
-    rot_mat = Rotation.from_rotvec(vec)
-    swap = np.identity(4)
-    swap = np.zeros((4, 4))
-    swap[:3, :3] = rot_mat.as_matrix()
-    swap[3, 3] = 1
-    return swap
-
-def apply_camera_pose_transformations(extrinsics, color2depth_transform):
-    """
-    Apply the camera pose transformation using rotation and translation from color2depth transform.
-    
-    Args:
-        extrinsics (numpy.ndarray): The extrinsic matrix representing the camera pose.
-        color2depth_transform (numpy.ndarray): The transformation from color to depth camera frame.
-        
-    Returns:
-        numpy.ndarray: The updated extrinsics after applying the camera pose transformations.
-    """
-    # Extract rotation and translation from the color2depth transformation
-    c2d_rotation = color2depth_transform[:3, :3]
-    c2d_translation = color2depth_transform[:3, 3]
-
-    # Extract the camera pose (extrinsics) rotation and translation
-    dcp_rotation = extrinsics[:3, :3]
-    dcp_translation = extrinsics[:3, 3]
-
-    # Combine the rotations: dcp.rotation * c2d_tf.rotation
-    combined_rotation = np.dot(dcp_rotation, c2d_rotation)
-
-    # Combine the translations: (dcp.rotation * c2d_tf.translation) + dcp.translation
-    combined_translation = np.dot(dcp_rotation, c2d_translation) + dcp_translation
-
-    # Create a new homogeneous transformation matrix with combined rotation and translation
-    combined_extrinsics = np.identity(4)
-    combined_extrinsics[:3, :3] = combined_rotation
-    combined_extrinsics[:3, 3] = combined_translation
-
-    return combined_extrinsics
-
 
 def load_cam_infos(take_path: Path) -> dict:
     camera_parameters = {}
@@ -348,7 +284,7 @@ def load_cam_infos(take_path: Path) -> dict:
         ROTATE_22_5_X = rotation_to_homogenous(-np.pi / 8 * np.array([1, 0, 0]))
         ROTATE_45_Y = rotation_to_homogenous(-np.pi / 4 * np.array([0, 1, 0]))
 
-        extrinsics = extrinsics @ YZ_FLIP #YZ_SWAP @ YZ_FLIP @ extrinsics @ YZ_FLIP  # @ XZ_SWAP @ XY_SWAP
+        extrinsics = extrinsics @ YZ_FLIP
         #print(f"Camera {cam_id} - After Additional Transformations:\n", extrinsics)
 
         # Compute color2world and depth2world
@@ -378,70 +314,6 @@ def load_cam_infos(take_path: Path) -> dict:
         }
 
     return camera_parameters
-
-# Additional helper function to project 3D points to 2D using camera parameters
-def project_to_2d(point_3d, camera):
-    """
-    Project a 3D point to 2D pixel coordinates with radial and tangential distortion.
-    
-    Args:
-        point_3d: np.ndarray of shape (3,), 3D point in world coordinates.
-        camera: dict with camera parameters:
-            - "color2world": 4x4 extrinsic matrix.
-            - "fov_x": Focal length in x direction.
-            - "fov_y": Focal length in y direction.
-            - "c_x": Principal point x-coordinate.
-            - "c_y": Principal point y-coordinate.
-            - "radial_params": Radial distortion coefficients (k1, k2, k3).
-            - "tangential_params": Tangential distortion coefficients (p1, p2).
-
-    Returns:
-        np.ndarray of shape (2,), 2D point in pixel coordinates.
-    """
-    # Convert the point to homogeneous coordinates
-    extrinsic_matrix = np.linalg.inv(camera["color2world"])
-    fx = camera['fov_x']
-    fy = camera['fov_y']
-    c_x = camera['c_x']
-    c_y = camera['c_y']
-    k = camera['radial_params']
-    p = camera['tangential_params']
-    
-    # # Construct intrinsic matrix
-    intrinsic_matrix = camera['new_intrinsics']
-    #print(intrinsic_matrix)
-
-    # Convert point to homogeneous coordinates
-    point_3d_hom = np.append(point_3d, 1)  # Shape: (4,)
-    
-    # Apply extrinsic matrix to convert to camera coordinates
-    point_cam = extrinsic_matrix @ point_3d_hom  # Shape: (4,)
-    point_cam = point_cam[:3]  # Keep only x, y, z
-    
-    # Project to normalized camera coordinates
-    x_n = point_cam[0] / (point_cam[2] + 1e-8)
-    y_n = point_cam[1] / (point_cam[2] + 1e-8)
-    
-    # Compute radial distance squared (r^2)
-    #r2 = x_n**2 + y_n**2
-    
-    # Apply radial distortion
-    #radial_distortion = 1 + k[0] * r2 + k[1] * r2**2 + k[2] * r2**3
-    #x_radial = x_n * radial_distortion
-    #y_radial = y_n * radial_distortion
-    
-    # Apply tangential distortion
-    #x_tangential = 2 * p[0] * x_n * y_n + p[1] * (r2 + 2 * x_n**2)
-    #y_tangential = p[0] * (r2 + 2 * y_n**2) + 2 * p[1] * x_n * y_n
-    
-    # Combine distortions
-    #x_distorted = x_radial + x_tangential
-    #y_distorted = y_radial + y_tangential
-    
-    # Convert to pixel coordinates using intrinsics
-    point_img = intrinsic_matrix @ [x_n, y_n, 1]
-    # Return 2D point in integer pixel coordinates
-    return point_img[:2].astype(np.int32)
 
 def project_3d_to_2d(points_3d, intrinsics, extrinsics):
     """

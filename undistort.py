@@ -1,68 +1,87 @@
 import cv2
 import numpy as np
-from pathlib import Path
+import matplotlib as plt
 import json
-from utils_ksv1 import load_camera_params, load_cam_infos
-from utils_ksv1 import project_pose, homogenous_to_rot_trans, project_to_2d
+import glob
 
-CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
-def undistort_images(image_folder: Path, output_folder: Path, camera_parameters: dict):
-    """
-    Undistort images in a folder based on camera parameters.
-    
-    Args:
-        image_folder (Path): Path to the folder containing images.
-        output_folder (Path): Path to the folder to save undistorted images.
-        camera_parameters (dict): Dictionary containing camera intrinsics and distortion coefficients.
-    """
-    # Ensure the output folder exists
-    output_folder.mkdir(parents=True, exist_ok=True)
-    
-    cam_params = camera_parameters
-    
-    # Extract required parameters
-    intrinsics = cam_params['intrinsics']
-    width, height = cam_params['width'], cam_params['height']
-    radial = cam_params['radial_params']
-    tangential = cam_params['tangential_params']
-    
-    # Combine radial and tangential distortion parameters
-    distortion_coeffs = np.array([*radial, *tangential], dtype=np.float32)
-    
-    # Iterate through all images in the folder
-    for image_path in sorted(image_folder.glob('*.tiff')):  # Change '*.jpg' to match your file type
-        # Read the image
-        image = cv2.imread(str(image_path))
-        if image is None:
-            print(f"Skipping invalid image: {image_path}")
-            continue
-        
-        # Get optimal new camera matrix
-        new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(
-            intrinsics, distortion_coeffs, (width, height), alpha=0, newImgSize=(width, height)
-        )
+def precompute_undistort_maps(json_params, width, height):
 
-        print(new_camera_matrix)
-        
-        # Undistort the image
-        undistorted_image = cv2.undistort(image, intrinsics, distortion_coeffs, None, new_camera_matrix)
-        
-        # Save the undistorted image
-        output_path = output_folder / image_path.name
-        cv2.imwrite(str(output_path), undistorted_image)
-        print(f"Saved undistorted image to {output_path}")
+    camera_matrix = np.array([
+        [json_params['fov_x'], 0, json_params['c_x']],
+        [0, json_params['fov_y'], json_params['c_y']],
+        [0, 0, 1]
+    ], dtype=np.float32)
 
-# Example usage:
-if __name__ == "__main__":
-    # Define paths
-    images_folder = Path("/home/victorkawai/121224_fornero_take_6/ksv1capture/export/depth/")  # Folder with images
-    output_folder = Path("/home/victorkawai/121224_fornero_take_6/ksv1capture/export/depth_undistorted/")  # Folder for undistorted images
-    take_path = Path("/home/victorkawai/121224_fornero_take_6/ksv1capture/export/")  # Folder containing calibration data
-    
-    for cam in CAMERAS[:]:
-    # Load camera parameters
-        camera_params = load_cam_infos(take_path)[cam]
-        
-        # Undistort images
-        undistort_images(images_folder, output_folder, camera_params)
+    # Distortion coefficients
+    dist_coeffs = np.array([
+        json_params['radial_distortion']['m00'],  # k1
+        json_params['radial_distortion']['m10'],  # k2
+        json_params['tangential_distortion']['m00'],  # p1
+        json_params['tangential_distortion']['m10'],  # p2
+        json_params['radial_distortion']['m20'],  # k3
+        json_params['radial_distortion']['m30'],  # k4 (optional)
+        json_params['radial_distortion']['m40'],  # k5 (optional)
+        json_params['radial_distortion']['m50'],  # k6 (optional)
+    ], dtype=np.float32)
+
+    # Create new camera matrix
+    new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, (width, height), 0)
+
+    # Precompute maps
+    map1, map2 = cv2.initUndistortRectifyMap(
+        camera_matrix, dist_coeffs, None, new_camera_matrix, (width, height), cv2.CV_32F
+    )
+
+    # Update the JSON parameters with the matrices
+    json_params['new_camera_matrix'] = new_camera_matrix.tolist()
+    json_params['original_camera_matrix'] = camera_matrix.tolist()
+    json_params['distortion_coefficients'] = dist_coeffs.tolist()
+    return map1, map2
+
+
+def undistort_image(json_params, input_image_path, output_image_path, map1, map2):
+    # Load the image
+    input_image = cv2.imread(input_image_path, cv2.IMREAD_UNCHANGED)
+
+    undistorted_image = cv2.remap(input_image, map1, map2, interpolation=cv2.INTER_LINEAR)
+
+    plt.imshow(undistorted_image, cmap='gray', vmin=0, vmax=8048)  # Set min and max to depth range
+    plt.colorbar()
+    plt.title('Depth Image')
+    plt.show()
+    print(f"Input depth image range: {input_image.min()} to {input_image.max()}")
+    print(f"Undistorted depth image range: {undistorted_image.min()} to {undistorted_image.max()}")
+
+    # Optional: Crop the image based on the ROI
+    # x, y, w, h = roi
+    # undistorted_image = undistorted_image[y:y+h, x:x+w]
+
+    # Save the undistorted image
+    cv2.imwrite(output_image_path, undistorted_image)
+
+    print(f"Undistorted image saved as {output_image_path}")
+
+
+base_folder = '/home/narvis/Documents/recordings/121224_fornero_setup/ksv1capture/export'
+# output_folder = '/home/victorkawai/121224_fornero_take_6/ksv1capture/export/'
+calibration_folder = '/home/narvis/Documents/recordings/121224_fornero_setup/ksv1capture/export/calibration'
+
+for i in ['color', 'depth']:
+    for j in ['camera01', 'camera02', 'camera03', 'camera04']:
+        image_files = sorted(glob.glob(f'{base_folder}/{i}_dist/*{j}*'))
+        json_file = f'{calibration_folder}/{j}.json'
+
+        for image_file in image_files:
+            # print(image_file)
+            output_image_path = image_file
+            output_image_path = image_file.replace('color_dist', 'color').replace('depth_dist', 'depth')
+            with open(json_file, 'r') as file:
+                data = json.load(file)
+            json_params = data['value0'][f'{i}_parameters']
+
+            map1, map2 = undistort_image(json_params, json_params['width'], json_params['height'])
+
+            undistort_and_update(json_params, image_file, output_image_path, map1, map2)
+            with open(json_file, 'w') as file:
+                json.dump(data, file, indent=4)
