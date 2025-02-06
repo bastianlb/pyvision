@@ -7,7 +7,7 @@ import open3d.visualization.gui as gui
 import cv2
 import torch
 
-from utils import load_camera_params, load_cam_infos
+from utils import load_cam_infos
 from utils import project_pose, homogenous_to_rot_trans, project_to_2d, project_3d_to_2d
 
 DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"

@@ -8,7 +8,6 @@ from scipy.spatial.transform import Rotation
 import cv2
 import torch
 
-
 def unfold_camera_param(camera):
     world2color = np.linalg.inv(camera["color2world"])
     R, T = homogenous_to_rot_trans(world2color)
@@ -22,7 +21,6 @@ def unfold_camera_param(camera):
     k = camera['radial_params']
     p = camera['tangential_params']
     return R, T, f, c, k, p
-
 
 def rot_trans_to_homogenous(rot, trans):
     """
@@ -38,7 +36,6 @@ def rot_trans_to_homogenous(rot, trans):
     X[3, 3] = 1
     return X
 
-
 def homogenous_to_rot_trans(X):
     """
     Args
@@ -51,81 +48,12 @@ def homogenous_to_rot_trans(X):
 
 
 def rotation_to_homogenous(vec):
-    rot_mat = Rotation.from_rotvec(vec).as_matrix()
-    homogenous = np.identity(4)
-    homogenous[:3, :3] = rot_mat
-    return homogenous
-
-
-
-def load_camera_params(cam, dataset_root):
-    scaling = 1000
-    ds = {"id": cam}
-    
-    # Load intrinsics from JSON
-    intrinsics_path = osp.join(dataset_root, "calibration", f'{cam}.json')
-    print(intrinsics_path)
-    assert osp.exists(intrinsics_path)
-    with open(intrinsics_path, 'r') as f:
-        intrinsics_data = json.load(f)['value0']
-    
-    # Extract color intrinsics
-    color_intrinsics = intrinsics_data["color_parameters"]["intrinsics_matrix"]
-    ds['fx'] = color_intrinsics["m00"]
-    ds['fy'] = color_intrinsics["m11"]
-    ds['cx'] = color_intrinsics["m20"]
-    ds['cy'] = color_intrinsics["m21"]
-
-    radial_distortion = intrinsics_data["color_parameters"]["radial_distortion"]
-    tangential_distortion = intrinsics_data["color_parameters"]["tangential_distortion"]
-    # Extract distortion coefficients
-    ds["k"] = np.array([radial_distortion[f"m{i}0"] for i in range(6)])
-
-    ds["p"] = np.array([tangential_distortion["m00"], tangential_distortion["m10"]])
-
-    # Extract Depth-to-Color Transformation
-    depth2color_translation = np.array(
-        [intrinsics_data["color2depth_transform"]["translation"][f"m{i}0"] for i in range(3)]
-    )
-    
-    depth2color_rotation = intrinsics_data["color2depth_transform"]["rotation"]
-    depth2color_rotation_matrix = Rotation.from_quat(
-        [
-            depth2color_rotation["x"],
-            depth2color_rotation["y"],
-            depth2color_rotation["z"],
-            depth2color_rotation["w"],
-        ]
-    ).as_matrix()
-    depth2color = rot_trans_to_homogenous(depth2color_rotation_matrix, depth2color_translation)
-    ds["depth2color"] = depth2color
-
-    # Extract Camera Pose (Extrinsics)
-    camera_pose_translation = np.array(
-        [intrinsics_data["camera_pose"]["translation"][f"m{i}0"] for i in range(3)]
-    )
-    camera_pose_rotation = intrinsics_data["camera_pose"]["rotation"]
-    camera_pose_rotation_matrix = Rotation.from_quat(
-        [
-            camera_pose_rotation["x"],
-            camera_pose_rotation["y"],
-            camera_pose_rotation["z"],
-            camera_pose_rotation["w"],
-        ]
-    ).as_matrix()
-    camera_pose_homogeneous = rot_trans_to_homogenous(
-        camera_pose_rotation_matrix, camera_pose_translation
-    )
-    ds["camera_pose"] = camera_pose_homogeneous
-
-    # Derive Color-to-World and Depth-to-World Transformations
-    depth2world = camera_pose_homogeneous
-    color2world = depth2world @ np.linalg.inv(depth2color)
-
-    ds["depth2world"] = depth2world
-    ds["color2world"] = color2world
-
-    return ds
+    rot_mat = Rotation.from_rotvec(vec)
+    swap = np.identity(4)
+    swap = np.zeros((4, 4))
+    swap[:3, :3] = rot_mat.as_matrix()
+    swap[3, 3] = 1
+    return swap
 
 def project_points_radial(x, R, T, K, k, p):
     """
@@ -165,7 +93,6 @@ def project_points_radial(x, R, T, K, k, p):
     # ypixel = np.multiply(f, y) + c
     return ypixel.T
 
-
 def project_points_opencv(x, R, T, K, k, p):
     k = np.array(k).reshape(-1, 1)
     p = np.array(p).reshape(-1, 1)
@@ -179,14 +106,10 @@ def project_points_opencv(x, R, T, K, k, p):
     # TODO: why does projectPoints nest arrays like this?
     return np.array([x[0] for x in points_2d[0]])
 
-
 def project_pose(x, camera):
     R, T, f, c, k, p = unfold_camera_param(camera)
 
-    #K = np.array([f[0][0], 0, c[0][0],
-    #              0, f[1][0], c[1][0],
-    #              0, 0, 1])
-    #K = K.reshape(3,3)
+    # Camera intrinsics after undistortion, run undistort.py before.
     K = camera['new_intrinsics']
     loc2d_opencv = project_points_opencv(x, R, T, K, k, p)
     loc2d = project_points_radial(x, R, T, K, k, p)
@@ -196,17 +119,14 @@ def project_pose(x, camera):
     print(f" loc2d -> {loc2d} \n opencv -> {loc2d_opencv}")
     return loc2d
 
-
 def load_rotation_matrix(rot: dict) -> np.ndarray:
     return Rotation.from_quat([rot['x'], rot['y'], rot['z'], rot['w']]).as_matrix()
-
 
 def load_transform_matrix(trans: dict, rot: dict) -> np.ndarray:
     transform = np.zeros((4, 4), dtype=np.float32)
     transform[:3, :3] = load_rotation_matrix(rot)
     transform[:, 3] = [trans['m00'], trans['m10'], trans['m20'], 1]
     return transform
-
 
 def extract_intrinsics_matrix(intrinsics_json: dict) -> np.ndarray:
     return np.asarray([[intrinsics_json['m00'], intrinsics_json['m10'], intrinsics_json['m20']],
