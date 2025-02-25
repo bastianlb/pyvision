@@ -10,7 +10,7 @@ print(cv2.__version__)
 CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 if __name__ == "__main__":
-    dir = Path("/home/victorkawai/121224_fornero_take_6/ksv1capture/export/")
+    dir = Path("./data")
     if not dir.exists():
         print("Invalid directory")
         sys.exit(1)

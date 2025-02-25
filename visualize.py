@@ -8,9 +8,9 @@ import cv2
 import torch
 
 from utils import load_cam_infos
-from utils import project_pose, homogenous_to_rot_trans, project_to_2d, project_3d_to_2d
+from utils import project_pose, homogenous_to_rot_trans, project_3d_to_2d
 
-DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
+DATA_DIR = "./data"
 CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 
@@ -20,15 +20,17 @@ def project_to_views(point):
     for cam in CAMERAS[:]:
         file_id = str(frame_id).zfill(6)
         params = load_cam_infos(DATA_DIR)[cam]
-        #print(params['intrinsics'])
-        #loc2d = project_pose(point, params)
         intrinsics = params['new_intrinsics']
         extrinsics = params['color2world']
+        # OpenCV projection
+        #loc2d = project_pose(point, params)
+        # Pytorch projection
         torch_point = torch.tensor(point, dtype=torch.float32)
         loc2d = project_3d_to_2d(torch_point, intrinsics, extrinsics)
         print(loc2d)
         loc2d =loc2d[0]
-        fpath = os.path.join(DATA_DIR, "color", f"color_{file_id}_{cam}_undistorted.jpg")
+        # undistorted image
+        fpath = os.path.join(DATA_DIR, "color", f"color_{file_id}_{cam}.jpg")
         color = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
         if color is None:
             print("File not found: ", fpath)
@@ -65,8 +67,7 @@ def render_camera_poses(points, vis, frame_id):
     vis.add_geometry("coordinate_frame", mesh_frame)
     for cam in CAMERAS:
         file_id = str(frame_id).zfill(6)
-#        fpath = os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply")
-        fpath = os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply")
+        fpath = os.path.join(DATA_DIR, "pointclouds_split", f"pointcloud_{file_id}_{cam}.ply")
         if not os.path.exists(fpath):
             print("File does not exist: ", fpath)
             continue
@@ -110,8 +111,9 @@ def render_single_transform(point, vis):
     cam = "camera02"
     file_id = str(frame_id).zfill(6)
     # point cloud in world coordinate system
-    ply = o3d.io.read_point_cloud(os.path.join(DATA_DIR, "pointclouds_e57", f"pointcloud_{file_id}_{cam}.ply"))
-    vis.add_geometry(f"{cam}-ply-camera", ply)
+    ply = o3d.t.io.read_point_cloud(os.path.join(DATA_DIR, "pointclouds_split", f"pointcloud_{file_id}_{cam}.ply"))
+    ply_legacy = ply.to_legacy()
+    vis.add_geometry(f"{cam}-ply-camera", ply_legacy)
     params = load_cam_infos(DATA_DIR)[cam]
     depth2world = params["depth2world"]  # this is actually world2depth
     # extrinsics of the depth camera

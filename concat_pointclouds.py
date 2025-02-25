@@ -6,7 +6,7 @@ import open3d.visualization.gui as gui
 
 print(o3d.__version__)
 
-DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/pointclouds_e57/"
+DATA_DIR = "./data/pointclouds_split/"
 CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 

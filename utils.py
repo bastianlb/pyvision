@@ -218,7 +218,7 @@ def load_cam_infos(take_path: Path) -> dict:
 
         camera_parameters[f'camera0{cam_id}'] = {
             'intrinsics': intrinsics,
-            'new_intrinsics': new_intrinsics,
+            'new_intrinsics': new_intrin,
             'extrinsics': extrinsics,
             'fov_x': color_params['fov_x'],
             'fov_y': color_params['fov_y'],

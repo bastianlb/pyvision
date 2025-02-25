@@ -4,9 +4,9 @@ import open3d as o3d
 import open3d.visualization.gui as gui
 import cv2
 from visualize import render_camera_poses
-from utils import load_camera_params, unfold_camera_param
+from utils import unfold_camera_param, load_cam_infos
 
-DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
+DATA_DIR = "./data"
 CAMERAS = ["camera01", "camera02", "camera03", "camera04"]
 
 
@@ -59,7 +59,7 @@ def reproject_pixel_in_3D(camera, px_coords):
         return None
     # load the camera parameters (extrinsics and intrinsics)
     # they perform the mapping from a world point in 3D to a pixel in 2D
-    params = load_camera_params(camera, DATA_DIR)
+    params = load_cam_infos(DATA_DIR)[camera]
     # invert the camera parameters to get a reprojection from 2D into 3D
     K_inv, R_t, T_inv = calculate_reprojection_params(params)
     px_to_depth_cam = K_inv @ px_coords * depth

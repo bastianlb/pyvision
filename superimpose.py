@@ -4,7 +4,7 @@ import numpy.ma as ma
 import matplotlib.pyplot as plt
 import cv2
 
-DATA_DIR = "/home/victorkawai/121224_fornero_take_6/ksv1capture/export/"
+DATA_DIR = "./data"
 
 def plot_cam_grid(axes, cameras, frames):
     # display only for every other column
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     cameras_1 = ['camera01', 'camera02']
     cameras_2 = ['camera03', 'camera04']
     # frames = [500, 700, 900]
-    frames = [5, 505, 1005]
+    frames = [5]
 
     fig, axes = plt.subplots(nrows=len(frames) * 2, ncols=len(cameras_1), figsize=(6, 12))
 
